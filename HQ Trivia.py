@@ -112,11 +112,12 @@ def getRequestFromInput(question, list_answer):
 def getNbResults(q):
     r = requests.get('http://www.google.com/search', params={'q':q})
 
-    soup = BeautifulSoup(r.text, "lxml")
-    strResults = soup.find('div',{'id':'resultStats'}).text
+    soup = BeautifulSoup(r.text, "html.parser")
+    strResult = soup.find('div',{'id':'resultStats'}).text
+    result = int(''.join([x for x in strResult if x.isdigit()]))
 
-    print(q, '->', strResults)
-    return int((strResults).split(' ')[-2].replace(',', ''))
+    print(q, '->', result)
+    return result
 
 def getAnswerFromRequest(list_request, order='AQ'):
     stats = {}
@@ -142,7 +143,7 @@ def getAnswerFromRequest(list_request, order='AQ'):
 
 
 #list_req = getRequestFromPhone()
-list_req = getRequestFromInput('capital of France', ['Paris', 'Madrid', 'New York'])
+list_req = getRequestFromInput('What is the capital of Spain', ['Paris', 'Madrid', 'New York'])
 
 if len(list_req):
     getAnswerFromRequest(list_req)
