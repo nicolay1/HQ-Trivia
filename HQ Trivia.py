@@ -1,14 +1,31 @@
 from PIL import Image
 import pytesseract
-import requests
-from bs4 import BeautifulSoup
 import cv2
 from mss import mss
+
+import requests
+import wikipedia
+from bs4 import BeautifulSoup
+
 import os
+import prompt
 import operator
 import numpy as np
+import time
 
-os.system('clear')
+import nltk
+from nltk.corpus import stopwords
+
+sw = set(stopwords.words('english'))
+
+def getRequestFromInput(question, list_answer, format=False):
+    if(format):
+        question = formatQuestion(question)
+
+    return [{
+        'q': question,
+        'a': a}
+        for a in list_answer]
 
 def getRequestFromFile(filename):
     img = cv2.imread(filename,0)
@@ -22,12 +39,7 @@ def getRequestFromFile(filename):
         question = text_split[0].replace('\n', ' ')
         list_answer = [x.strip() for x in ' '.join(text_split[1:]).split('\n') if len(x)]
 
-        list_req = []
-
-        for a in list_answer:
-            list_req.append({'q': question,'a': a})
-        
-        return list_req
+        return getRequestFromInput(question, list_answer)
 
     return []
 
@@ -50,21 +62,12 @@ def getRequestFromCamera():
             question = text_split[0].replace('\n', ' ')
             list_answer = [x.strip() for x in ' '.join(text_split[1:]).split('\n') if len(x)]
 
-            print('q:', question)
-            print('a', list_answer)
-
         if (cv2.waitKey(1) & 0xFF == ord('q')) or len(list_answer) == 3:
             break
 
     camera.release()
     cv2.destroyAllWindows()
-
-    list_req = []
-
-    for a in list_answer:
-        list_req.append({'q': question,'a': a})
-    
-    return list_req
+    return getRequestFromInput(question, list_answer)
 
 def getRequestFromPhone():
     monitor = {'top': 100, 'left': 0, 'width': 395, 'height': 500}
@@ -88,62 +91,106 @@ def getRequestFromPhone():
             question = text_split[0].replace('\n', ' ')
             list_answer = [x.strip() for x in ' '.join(text_split[1:]).split('\n') if len(x)]
 
-            print('q:', question)
-            print('a', list_answer)
-
         if (cv2.waitKey(1) & 0xFF == ord('q')) or len(list_answer) == 3:
             break
 
     cv2.destroyAllWindows()
+    return getRequestFromInput(question, list_answer)
 
-    list_req = []
-
-    for a in list_answer:
-        list_req.append({'q': question,'a': a})
-    
-    return list_req
-
-def getRequestFromInput(question, list_answer):
-    return [{
-        'q': question,
-        'a': a}
-        for a in list_answer]
+def formatQuestion(question):
+    return ' '.join([x for x in question.lower().split() if x not in sw])
 
 def getNbResults(q):
     r = requests.get('http://www.google.com/search', params={'q':q})
 
     soup = BeautifulSoup(r.text, "html.parser")
+
     strResult = soup.find('div',{'id':'resultStats'}).text
     result = int(''.join([x for x in strResult if x.isdigit()]))
 
-    print(q, '->', result)
     return result
 
-def getAnswerFromRequest(list_request, order='AQ'):
+def getAnswerFromRequest(list_req, order='AQ'):
     stats = {}
 
-    for req in list_req:
+    for n,req in enumerate(list_req):
         if(order == 'AQ'):
             q = req['a'] + ' ' + req['q']
 
         elif(order == 'QA'):
             q = req['q'] + ' ' + req['a']
 
-        stats[req['a']] = getNbResults(q)
+        stats[n+1] = getNbResults(q)
 
     total = sum(stats.values())
 
-    for a,s in stats.items():
-        stats[a] = round(s / total, 2)
+    for n,s in stats.items():
+        stats[n] = round(s / total, 2)
 
-    answer = max(stats.items(), key=operator.itemgetter(1))
+    return stats
 
-    print('Stats :', stats, '\n')
-    print('Answer :', answer, '\n')
+def getRequest(source):
+    if source == 'phone':
+        return getRequestFromPhone()
 
+    elif source == 'camera':
+        return getRequestFromCamera()
 
-#list_req = getRequestFromPhone()
-list_req = getRequestFromInput('What is the capital of Spain', ['Paris', 'Madrid', 'New York'])
+    elif source == 'file':
+        return getRequestFromFile()
 
-if len(list_req):
-    getAnswerFromRequest(list_req)
+    elif source == 'test':
+        return getRequestFromInput(
+            'What is the capital of France',
+            ['Paris', 'London', 'Madrid'])
+
+    return []
+
+def save(s, filename='history.txt'):
+    with open(filename, 'a') as f:
+        f.write('\n')
+        f.write(s)
+        f.write('\n')
+    
+    f.close()
+
+def play_HQ(source='test', _save = False):
+    n_question = 0
+    
+    if _save:
+        save(time.strftime("%a %d %b %Y %H:%M:%S"))
+
+    play = prompt.integer('\nNew question : ')
+
+    while(play):
+        s = ""
+        n_question += 1
+        list_req = getRequest(source)
+
+        if len(list_req):
+            print('\nQ',n_question,'.',list_req[0]['q'], '?\n')
+            s += 'Q' + str(n_question) + '. ' + str(list_req[0]['q']) + ' ?'
+
+            stats = getAnswerFromRequest(list_req)
+            answer = list_req[max(stats.items(), key=operator.itemgetter(1))[0] - 1]['a']
+            
+            for n,req in enumerate(list_req):
+                print(n+1, '. ', req['a'], '->', stats[n+1])
+                s += '\n' + str(n+1) + '. ' + str(req['a']) + ' -> ' + str(stats[n+1])
+
+            print('\nAnswer :', answer)
+            s += '\n\nAnswer : ' + answer
+
+            correct_answer = prompt.integer('\nThe correct answer is : ')
+            s += '\nThe correct answer is : ' + list_req[correct_answer-1]['a']
+
+            if _save:
+                save(s)
+
+        play = prompt.integer('\nNew question : ')
+
+    if _save:
+        save('--------------------------------------------------')
+
+os.system('clear')
+play_HQ(source='phone')
