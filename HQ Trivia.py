@@ -70,9 +70,10 @@ def getRequestFromCamera():
     return getRequestFromInput(question, list_answer)
 
 def getRequestFromPhone():
-    monitor = {'top': 100, 'left': 0, 'width': 395, 'height': 500}
+    monitor = {'top': 150, 'left': 0, 'width': 395, 'height': 450}
     sct = mss()
     cv2.namedWindow("Phone", cv2.WINDOW_NORMAL)
+    cv2.moveWindow("Phone", 500, 500);
 
     question = ""
     list_answer = [] 
@@ -146,7 +147,7 @@ def getRequest(source):
 
     return []
 
-def save(s, filename='history.txt'):
+def saveFile(s, filename='history.txt'):
     with open(filename, 'a') as f:
         f.write('\n')
         f.write(s)
@@ -154,11 +155,12 @@ def save(s, filename='history.txt'):
     
     f.close()
 
-def play_HQ(source='test', _save = False):
+def play_HQ(source='test', save = False):
     n_question = 0
+    n_correct_answer = 0
     
-    if _save:
-        save(time.strftime("%a %d %b %Y %H:%M:%S"))
+    if save:
+        saveFile(time.strftime("%a %d %b %Y %H:%M:%S"))
 
     play = prompt.integer('\nNew question : ')
 
@@ -182,15 +184,20 @@ def play_HQ(source='test', _save = False):
             s += '\n\nAnswer : ' + answer
 
             correct_answer = prompt.integer('\nThe correct answer is : ')
-            s += '\nThe correct answer is : ' + list_req[correct_answer-1]['a']
+            correct_answer = list_req[correct_answer-1]['a']
+            s += '\nThe correct answer is : ' + correct_answer
 
-            if _save:
-                save(s)
+            if answer == correct_answer:
+                n_correct_answer += 1
+
+            if save:
+                saveFile(s)
 
         play = prompt.integer('\nNew question : ')
 
-    if _save:
-        save('--------------------------------------------------')
+    if save:
+        saveFile('Accuracy : ' + str(n_correct_answer) + ' / ' + str(n_question))
+        saveFile('--------------------------------------------------')
 
 os.system('clear')
-play_HQ(source='phone')
+play_HQ(source='phone', save=True)
