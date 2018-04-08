@@ -15,10 +15,11 @@ import time
 
 import nltk
 from nltk.corpus import stopwords
-
 sw = set(stopwords.words('english'))
 
-def getRequestFromInput(question, list_answer, format=False):
+from Wikipedia import *
+
+def getRequestsFromInput(question, list_answer, format=False):
     if(format):
         question = formatQuestion(question)
 
@@ -39,7 +40,7 @@ def getRequestFromFile(filename):
         question = text_split[0].replace('\n', ' ')
         list_answer = [x.strip() for x in ' '.join(text_split[1:]).split('\n') if len(x)]
 
-        return getRequestFromInput(question, list_answer)
+        return getRequestsFromInput(question, list_answer)
 
     return []
 
@@ -67,7 +68,7 @@ def getRequestFromCamera():
 
     camera.release()
     cv2.destroyAllWindows()
-    return getRequestFromInput(question, list_answer)
+    return getRequestsFromInput(question, list_answer)
 
 def getRequestFromPhone():
     monitor = {'top': 150, 'left': 0, 'width': 395, 'height': 450}
@@ -96,12 +97,12 @@ def getRequestFromPhone():
             break
 
     cv2.destroyAllWindows()
-    return getRequestFromInput(question, list_answer)
+    return getRequestsFromInput(question, list_answer)
 
 def formatQuestion(question):
     return ' '.join([x for x in question.lower().split() if x not in sw])
 
-def getNbResults(q):
+def getResults_Google(q):
     r = requests.get('http://www.google.com/search', params={'q':q})
 
     soup = BeautifulSoup(r.text, "html.parser")
@@ -111,7 +112,7 @@ def getNbResults(q):
 
     return result
 
-def getAnswerFromRequest(list_req, order='AQ'):
+def getStats_Google(list_req, order='AQ'):
     stats = {}
 
     for n,req in enumerate(list_req):
@@ -121,7 +122,7 @@ def getAnswerFromRequest(list_req, order='AQ'):
         elif(order == 'QA'):
             q = req['q'] + ' ' + req['a']
 
-        stats[n+1] = getNbResults(q)
+        stats[n+1] = getResults_Google(q)
 
     total = sum(stats.values())
 
@@ -129,6 +130,29 @@ def getAnswerFromRequest(list_req, order='AQ'):
         stats[n] = round(s / total, 2)
 
     return stats
+
+def getResults_Wikipedia(list_req):
+    question = list_req[0]['q']
+    list_answer = []
+
+    for e in list_req:
+        list_answer.append(e['a'])
+
+    wiki_threads = []
+    
+    for subject in formatQuestion(question).split():
+        list_answer.append(subject)
+
+    for answer in list_answer:
+        wiki_threads.append(Wikipedia(question, answer))
+
+    print(list_answer)
+
+    for thread in wiki_threads:
+        thread.start()
+
+    for thread in wiki_threads:
+        thread.join() 
 
 def getRequest(source):
     if source == 'phone':
@@ -141,7 +165,7 @@ def getRequest(source):
         return getRequestFromFile()
 
     elif source == 'test':
-        return getRequestFromInput(
+        return getRequestsFromInput(
             'What is the capital of France',
             ['Paris', 'London', 'Madrid'])
 
@@ -170,10 +194,14 @@ def play_HQ(source='test', save = False):
         list_req = getRequest(source)
 
         if len(list_req):
-            print('\nQ',n_question,'.',list_req[0]['q'], '?\n')
-            s += 'Q' + str(n_question) + '. ' + str(list_req[0]['q']) + ' ?'
+            print('\nQ',n_question,'.', list_req[0]['q'], '?\n')
+            s += 'Q' + str(n_question) + '. ' + list_req[0]['q'] + ' ?'
 
-            stats = getAnswerFromRequest(list_req)
+            # change all structure
+            # change list_req into (question, list_answer
+            #getResults_Wikipedia(list_req)
+
+            stats = getStats_Google(list_req)
             answer = list_req[max(stats.items(), key=operator.itemgetter(1))[0] - 1]['a']
             
             for n,req in enumerate(list_req):
@@ -183,7 +211,11 @@ def play_HQ(source='test', save = False):
             print('\nAnswer :', answer)
             s += '\n\nAnswer : ' + answer
 
-            correct_answer = prompt.integer('\nThe correct answer is : ')
+            correct_answer = prompt.integer('The correct answer is : ')
+
+            if correct_answer < 1 or correct_answer > 3:
+                correct_answer = 1
+
             correct_answer = list_req[correct_answer-1]['a']
             s += '\nThe correct answer is : ' + correct_answer
 
